@@ -1,0 +1,132 @@
+---
+title: "QueueingModels_Simulation"
+author: "Sarah Deussing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## M/M/1 Model
+1 server
+
+#### Muffler Shop 
+Mechanic can replace at avg. rate 3 per hour
+Customers arrive every 30 mins on average
+
+lambda = 1/30 mins = 1/0.5 hr = 2/hour
+mu = 3/hour
+
+W (time in system) = 1/mu - lambda = 1 hour
+
+Cost of cust. waiting = `$`10 per hr per customer
+Mechanic wage = `$`15 per hour
+Purchasing cost = `$`200 per unit
+
+Total cost/hour = customer + wage + purchasing
+                = `$`10`*`L + `$`15 + `$`200`*`lambda
+                = `$`20 + `$`15 + `$`400 = `$`435
+To break even, charge `$`435/2 = `$`217.5 /customer
+
+## M/M/c Model
+c servers
+
+#### Customer Support Hotline
+6 Technicians, each services calls at rate of 4/hour
+Calls arrive randomly at rate of 20/hour
+
+Number of technicians to make wait time < 2 minutes?
+  --> Wq
+
+lambda = 20, mu = 4, c = 6
+```{r}
+library(queueing)
+
+hotlineModel <- NewInput.MMC(20, 4, 8)
+hotlineQueue <- QueueingModel(hotlineModel)
+
+print(summary(hotlineQueue), digits = 3)
+
+print(paste0('Wait time in mins: ', 60 * hotlineQueue$Wq))
+```
+
+## M/M/c/k Models
+Finite queue length
+
+#### Example structure
+```{r, warning = FALSE}
+library(queueing)
+
+k = 6
+
+MMCK_Model <- NewInput.MMCK(5, 7, 1, k)
+MMCK_queue <- QueueingModel(MMCK_Model)
+
+print(summary(MMCK_queue))
+
+# distribution of # customers in the system
+MMCK_queue$Pn
+
+# balking probability
+balk_prob <- MMCK_queue$Pn[k+1]
+balk_prob
+```
+
+#### Gas Station Waiting Space
+2 gas pumps, 3-vehicle waiting area
+Vehicles arrive at rate of 28/hour
+Vehicle spends 4 mins on average to fuel = 
+
+Average profit per customer = `$`30
+To expand waiting area = `$`12 /hour /space
+
+lambda = 28, mu = 15, s = 2, q - 3, k = q+s
+
+Total cost = rental + opportunity
+           = `$`12`*`q + `$`30`*`lambda`*`prob(balk)
+```{r}
+library(queueing)
+
+results <- c()
+
+for (q in 3:9) { #testing out different wait capacity
+  k = 2 + q
+  
+  gasModel <- NewInput.MMC(28, 15, 2, k)
+  gasQueue <- QueueingModel(gasModel)
+  balk_prob <- gasQueue$Pn[k+1]
+  
+  land_cost <- 12*q
+  opp_cost <- 30*28*balk_prob
+  total_cost <- land_cost + opp_cost
+  
+  results <- rbind(results, cbind(q, total_cost))
+}
+results
+```
+
+#### Hospital Capacity
+Big hospital: lambda = 14.1 /day, LOS = 2.9 days, c = 56 beds
+Small hospital: lambda = 4/8 /day, LOS = 2.9 days, c = 19 beds
+
+Probability of delay?
+```{r}
+library(queueing)
+
+bigModel <- NewInput.MMC(14.1, 1/2.9, 56)
+smallModel <- NewInput.MMC(4.8, 1/2.9, 19)
+
+bigQueue <- QueueingModel(bigModel)
+smallQueue <- QueueingModel(smallModel)
+
+# Occupancy Levels
+print(paste("Big: ", bigQueue$RO))
+print(paste("Small: ", smallQueue$RO))
+
+# Probability of Delay
+print(paste("Big: ", 1 - bigQueue$FWq(0)))
+print(paste("Small: ", 1 - smallQueue$FWq(0)))
+```
+
+

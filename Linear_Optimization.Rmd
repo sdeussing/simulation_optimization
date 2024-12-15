@@ -1,0 +1,129 @@
+---
+title: "Linear_Optimization"
+author: "Sarah Deussing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Flight Selection
+3 Itineraries: LAX-JFK via connecting, LAX-DFW, DWF-JFK
+3 Fare Classes: regular, discount, super saver
+
+LAX-DFW: Regular(x1, `$`100 D = 20), Discount(x2, `$`90, D = 40), Saver(x3, `$`80, D = 60)
+LAX-JFK: Regular(y1, `$`215, D = 80), Discount(y2, `$`185, D = 60), Saver(y3m `$`145, D = 70)
+DFW-JFK: Regular(z1, `$`140, D = 20), Discount(z2, `$`120, D = 20), Super Saver(z3, `$`100, D = 30)
+
+LAX to DFW: capacity 300, DFW to JFK: capacity 200
+
+Objective: MAX(100x1 + 90x2 + 80x3 + 215y1 + 185y2 + 145y3 + 140z1 + 120z2 + 100z3)
+
+Constraints:
+  x1 + x2 + x3 + y1 + y2 + y3 <= 300
+  y1 + y2 + y3 + z1 + z2 + z3 <= 200
+  demand & non-negativity for all
+```{r, warning = FALSE}
+library(lpSolve, quietly = TRUE)
+library(kableExtra, quietly = TRUE)
+
+obj_fun <- c(100, 90, 80, 215, 185, 145, 140, 120, 100)
+
+const_LHS <- matrix(c(1, 1, 1, 1, 1, 1, 0, 0, 0,
+                      0, 0, 0, 1, 1, 1, 1, 1, 1,
+                      1, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 1, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 1, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 1),
+                    ncol = 9, byrow = TRUE)
+
+colnames(const_LHS) = c("x1", "x2", "x3", "y1", "y2", "y3", "z1", "z2", "z3")
+rownames(const_LHS) = c("cap1", "cap2", "x1D", "x2D", "x3D", "y1D", "y2D", "y3D", "z1D", "z2D", "z3D")
+
+const_dir <- c("<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=")
+
+const_RHS <- c(300, 200, 20, 40, 60, 80, 60, 70, 20, 20, 30)
+
+model <- lp(direction = "max",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            compute.sens = TRUE)
+
+model$objval
+model$solution
+
+cbind(const_LHS %*% model$solution, const_dir, const_RHS)
+```
+
+## Gasoline Blending
+Blending crude to create gasoline
+
+Super Gasoline: >= 10 octane, <= 1 iron
+Regular Gasoline: >= 8 octane, <= 2 iron
+Diesel Fuel: >= 6 octane, <= 1 iron
+
+Crude1: 12 octane, 0.5 iron
+Crude2: 6 octane, 2.0 iron
+Crude3: 8 octane, 3.0 iron
+
+Revenue: Super(`$`70), Regular(`$`60), Diesel(`$`50)
+Cost: Crude1(`$`45), Crude2(`$`35), Crude3(`$`25)
+
+Constraints: <= 5000 of each crude and <= 14000 total
+
+Decision vars: x1s, x1r, x1d, x2s, x2r,x2d, x3s, x3r, x3d
+  - xn = crude n
+
+Formulation example for octane of regular gas:
+  12x1r + 6x2r + 8x3r / (x1r, x2r, x3r) >= 8
+  12x1r + 6x2r + 8x3r >= (x1r, x2r, x3r)`*`8
+
+Objective: MAX(70⋅(x1S + x2S + x3S) + 60⋅(x1R + x2R + x3R) + 50⋅(x1D + x2D + x3D) − 45⋅(x1S + x1R + x1D) − 35⋅(x2S + x2R + x2D) − 25⋅(x3S + x3R + x3D)
+```{r}
+obj_fun <- c(25, 35, 45, 15, 25, 35, 5, 15, 25)
+
+const_LHS <- matrix(c(2, -4, -2, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 4, -2, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 6, 0, 2,
+                      -0.5, 1, 2, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, -1.5, 0, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, -0.5, 1, 2,
+                      1, 0, 0, 1, 0, 0, 1, 0, 0,
+                      0, 1, 0, 0, 1, 0, 0, 1, 0,
+                      0, 0, 1, 0, 0, 1, 0, 0, 1,
+                      1, 1, 1, 1, 1, 1, 1, 1, 1),
+                    ncol = 9, byrow = TRUE)
+
+colnames(const_LHS) <- c("x1s", "x2s", "x3s", "x1r", "x2r", "x3r", "x1d", "x2d", "x3d")
+rownames(const_LHS) <- c("octane_super", "octane_reg", "octane_diesel", "iron_super", "iron_reg", "iron_diesel", "crude1_bound", "crude2_bound", "crude3_bound", "total_bound")
+
+const_dir <- c(">=", ">=", ">=",
+               "<=", "<=", "<=",
+               "<=", "<=", "<=", "<=")
+
+const_RHS <- c(0, 0, 0, 0, 0, 0, 5000, 5000, 5000, 14000)
+
+model <- lp(direction = "max",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            compute.sens = TRUE)
+
+model$objval
+model$solution
+
+cbind(const_LHS %*% model$solution, const_dir, const_RHS)
+```
+
+```{r}
+model$duals
+```

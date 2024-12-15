@@ -1,0 +1,184 @@
+---
+title: "Integer_Optimization"
+author: "Sarah Deussing"
+date: "2024-12-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Integer Optimization
+
+#### Purchasing Packages Dishes
+Dish A: 2mg cholesterol, 6g fat, 6g protein
+Dish B: 3mg cholesterol, 5g fat, 7g protein
+
+Constraints <= 12mg cholesterol, <= 30g fat
+  2A + 3B <= 12
+  6A + 5B <= 30
+  A, B >= 0
+
+Objective: MAX(6A + 7B) --> maximize protein
+```{r}
+library(lpSolve, quietly = TRUE)
+library(kableExtra, quietly = TRUE)
+
+obj_fun <- c(6,7)
+
+const_LHS <- matrix(c(2, 3,
+                      6, 5),
+                    ncol = 2, byrow = TRUE)
+
+const_dir <- c("<=", "<=")
+
+const_RHS <- c(12, 30)
+
+colnames(const_LHS) <- c("A", "B")
+rownames(const_LHS) <- c("cholesterol", "fat")
+
+int_vec <- c(1:2)
+
+model <- lp(direction = "max",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            int.vec = int_vec)
+
+model$objval
+
+model$solution
+
+cbind(const_LHS %*% model$solution, const_dir, const_RHS)
+```
+
+## Binary Integer Optimization
+
+#### Sports Schedule
+4 teams: Atlanta (A), Boston (B), Chicago (C), Detroit (D)
+2 divisions: AB, CD
+4 weeks: play team in division 2x, other teams 1x
+
+Objective: MAX(preferences --> division games later)
+
+Decision vars: x_ijk (i,j = team, k = week)
+
+Constraints:
+  x_AB1 + x_AB2 + x_AB3 + x_AB4 = 2 (same for CD)
+  x_AC1 + x_AC2 + x_AC3 + x_AC4 = 1 (same for AD, BC, BD)
+  x_AB1 + x_AC1 + x_AD1 = 1 (same for all combos)
+```{r}
+obj_fun <- c(1, 2, 4, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 4, 8)
+
+# AB-1,2,3,4, AC-1,2,3,4, AD-1,2,3,4, BC-1,2,3,4, BD-1,2,3,4, CD-1,2,3,4
+const_LHS <- matrix(c(1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+                      0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0,
+                      1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+                      0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0,
+                      0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1,
+                      0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1), ncol = 24, byrow = TRUE)
+
+
+const_dir <- c("=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=", "=")
+
+
+const_RHS <- c(2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+
+
+binary_vec <- c(1:22)
+
+
+model <- lp(direction = "max",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            binary.vec = binary_vec)
+
+model$objval
+
+model$solution
+```
+
+## Facility Location
+I = set of possible site distribution centers (3)
+J = set of stores to be sourced (5)
+  ci = cost of locating dist. center i
+  fij = transportation cost from i to store j
+
+Locate distribution centers
+  xi = 1 if center at site i
+  yij = 1 if store j is sourced from site i
+
+Objective: MIN( SUM(ci`*`xi) + SUM(SUM(fij`*`yij)))
+
+Constraints:
+  SUM(yij) = 1 (each store sourced from 1 center)
+  yij < xi
+```{r}
+# order of decision variables
+# x1, x2, x3, y11, y12, ..., y15, y21, ..., y25, y31, ..., y35
+
+obj_fun <- c(1.2, 0.8, 0.74, 0.18, 0.02, 0.28, 0.35, 0.12, 0.34, 0.21, 0.11, 0.02, 0.16, 0.39, 0.14, 0.1, 0.35, 0.37)
+
+
+const_LHS <- matrix(c(0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                      0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
+                      -1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      -1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      -1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      -1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, -1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, -1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+                      0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+                      0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                      0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                      0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                      0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+                      0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                      0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                      1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), ncol = 18, byrow = TRUE)
+
+
+const_dir <- c("=", "=", "=", "=", "=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", "=")
+
+
+const_RHS <- c(1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2)
+
+binary_vec <- c(1:18)
+
+model <- lp(direction = "min",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            binary.vec = binary_vec)
+
+model$objval
+
+model$solution
+```
+

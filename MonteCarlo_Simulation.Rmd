@@ -1,0 +1,217 @@
+---
+title: "Monte Carlo Simulation"
+author: "Sarah Deussing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Sum of 2 Dice
+
+```{r}
+n <-  100 # num of replications
+
+results <-  c()
+
+for (j in 1:n) {
+  dice_outcome <-  sample(c(1,2,3,4,5,6), # outcomes
+                        size = 2, # n to sample
+                        replace = TRUE,
+                        prob = 1/6 * c(1,1,1,1,1,1))
+  sum_of_dice <-  dice_outcome[1] + dice_outcome[2]
+  results <-  rbind(results, sum_of_dice)
+}
+```
+
+```{r}
+results_mean = mean(results)
+results_std = sd(results)
+
+# 95% confidence interval
+lower_CI <-  results_mean - 1.96 * results_std/sqrt(n)
+upper_CI <-  results_mean + 1.96 * results_std/sqrt(n)
+lower_CI
+upper_CI
+```
+
+## Investment
+Given $10,000 to invest. Avg. annual return = 8% with uncertainty sd = 17%. 
+Value of asset after 10 years?
+
+X = (Y1, ..., Y10) --> return rate of year 1-10
+Yi: normal distribution, mean = 1.08, sd = 0.17
+f(X) = 10,000 * Y1 * ... * Y10
+```{r}
+n <-  100
+
+fund_mean <-  1.08
+fund_std <-  0.17
+fund_initial <-  10000
+
+results = c()
+
+for (i in 1:n) {
+  fund_value <- fund_initial
+  
+  for (j in 1:10) {
+    return_rate <- rnorm(1, fund_mean, fund_std)
+    fund_value <- fund_value * return_rate
+  }
+  results <- rbind(results, fund_value)
+}
+```
+
+```{r}
+results_mean = mean(results)
+results_std = sd(results)
+
+# 95% confidence interval
+lower_CI <-  results_mean - 1.96 * results_std/sqrt(n)
+upper_CI <-  results_mean + 1.96 * results_std/sqrt(n)
+lower_CI
+upper_CI
+```
+
+## Auto Shop Tire Profit
+Demands: 300, 320, 340, 360, 380, 400
+Freqs: 3, 6, 12, 18, 5, 6
+Avg. selling price: `$`60 - `$`80
+Avg. cost per tire ratio: 20% - 30%
+Fixed cost: `$`12,000 per month
+
+X = (D, P, V)
+f(X) = Profit = P`*`D - (P`*`V)`*`D - 12000
+     = P`*`D `*` (1-V) - 12000
+```{r}
+n = 100
+
+results <- c()
+
+for (i in 1:n) {
+  selling_price <-  runif(1, 60, 80)
+  cost_price_ratio <- runif(1, 0.2, 0.3)
+  demand <- sample(c(300, 320, 340, 360, 380, 400),
+                   size = 1,
+                   replace = TRUE,
+                   prob = 1/60 * c(3, 6, 12, 18, 5, 6))
+  profit <- selling_price * demand * (1-cost_price_ratio) - 12000
+  results <- rbind(results, profit)
+}
+```
+
+```{r}
+results_mean = mean(results)
+results_std = sd(results)
+
+# 95% confidence interval
+lower_CI <-  results_mean - 1.96 * results_std/sqrt(n)
+upper_CI <-  results_mean + 1.96 * results_std/sqrt(n)
+lower_CI
+upper_CI
+```
+
+## Inventory Management: Newsvendor Problem
+Demand = normal distribution, mean = 20, sd = 4
+Cost per unit = `$`5
+Sale per unit = `$`25
+
+X = uncertain demand
+q = order quantity
+
+f(X) = Profit = Revenue - Demand
+     = 25`*`sales - 5`*`q
+     = 25`*`min(q, X) - 5`*`q
+     (sales = q if undersupply, X if oversupply)
+```{r}
+n = 1000
+
+replenish_cost = 5
+selling_price = 25
+
+q_list <- c(10:30)
+
+results <- c()
+
+for (q in q_list) {
+  for (i in 1:n) {
+    demand <- rnorm(1, 20, 5)
+    profit <- selling_price*min(q,demand) - replenish_cost*q
+  }
+  results <- rbind(results, profit)
+}
+```
+
+#### With Discount
+Reseller that buys at `$`4 per unit
+
+Leftovers = inventory - sales = q - min(q, X)
+New Profit = old revenue - cost + discount revenue
+           = 25`*`min(q,X) - 5`*`q + 4`*`(q-min(q,X))
+           
+## Hotel Renovation
+Standard & Luxury Rooms
+Revenue: `$`99, `$`169
+Cost: `$`12.5, `$`25
+Supply: 60, 20
+
+Upgrade cost: `$`50
+Fixed cost: `$`6000
+
+Demand: normal distribution (standard: mean = 50, sd = 10, luxury: mean = 20, sd = 5)
+
+```{r}
+n = 10000
+
+revenue_standard = 99
+revenue_luxury = 169
+
+cost_standard = 12.5
+cost_luxury = 25
+
+upgrade_cost = 50
+fixed_cost = 6000
+
+simulate <- function(standard_rooms, luxury_rooms) {
+  results = c()
+
+  for (i in 1:n) {
+  
+    standard_dem <- rnorm(1, 50, 10)
+    luxury_dem <- rnorm(1, 20, 5)
+  
+  #luxury_to_luxury: number of customers who originally requested luxury suites and stay there
+    luxury_to_luxury <- min(luxury_dem, luxury_rooms)
+  
+  #standard_to_luxury: number of customers who originally requested standard rooms but upgraded to luxury suites upon availability
+    standard_to_luxury <- min(standard_dem, luxury_rooms - luxury_to_luxury)
+  
+  #standard_to_standard: number of customers who
+  # originally requested standard rooms and stay there
+    standard_to_standard <- min(standard_rooms, standard_dem - standard_to_luxury)
+  
+    # profit
+    luxury_prof <- (revenue_luxury - cost_luxury) * luxury_to_luxury
+    upgraded_prof <- (revenue_standard + upgrade_cost - cost_luxury) * standard_to_luxury
+    standard_prof <- (revenue_standard - cost_standard) * standard_to_standard
+    profit <- luxury_prof + upgraded_prof + standard_prof - fixed_cost
+  
+    results = rbind(results, profit)
+    }
+  results_mean = mean(results)
+  results_sd = sd(results)
+  lower_CI = results_mean - 1.96 * results_sd / sqrt(n)
+  upper_CI = results_mean + 1.96 * results_sd / sqrt(n)
+  print(lower_CI)
+  print(upper_CI)
+}
+
+set.seed(1)
+simulate(60, 20)
+simulate(40, 30)
+
+# The plan with 40 standard rooms and 30 luxury rooms is the better option because it 
+# has higher values for the confidence interval, i.e. a greater profit
+```
+
