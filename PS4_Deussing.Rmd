@@ -1,0 +1,256 @@
+---
+title: "PS4_Deussing"
+author: "Sarah Deussing"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1: Moving
+
+Items: A B C D E F G H
+
+Weight [kg]: 10 9 15 3 11 6 3 4
+
+Value [$]: 500 200 700 600 100 600 800 600
+
+#### Part A
+Decision variables:
+
+A1, A2, B1, B2, ..., H1, H2 where A1 is placing item in box 1 (0 or 1) and A2 is placing item in box 2
+  - Binary decision variables
+
+Constraints:
+
+1. Item can either be in one or or neither, not both
+
+A1 + A2 <= 1
+B1 + B2 <= 1
+C1 + C2 <= 1
+D1 + D2 <= 1
+E1 + E2 <= 1
+F1 + F2 <= 1
+G1 + G2 <= 1
+H1 + H2 <= 1
+
+2. Box weight constraint:
+
+10A1 + 9B1+ 15C1+ 3D1+ 11E1+ 6F1+ 3G1+ 4H1 <= 22
+10A2 + 9B2+ 15C2+ 3D2+ 11E2+ 6F2+ 3G2+ 4H2 <= 28
+
+Objective function: Maximize value in boxes
+
+500A1 + 500A2 + 200B1 + 200B2 + 700C1 + 700C2 + 600D1 + 600D2 + 100E1 + 100E2 + 600F1 + 600F2 + 800G1 + 800G2 + 600H1 + 600H2
+
+#### Part B
+```{r}
+library(lpSolve, quietly = TRUE)
+library(kableExtra, quietly = TRUE)
+obj_fun= c(500,500,200,200,700,700,600,600,100,100,600,600,800,800,600,600)
+
+#a1 a2 b1 b2 c1 c2 d1 d2 e1 e2 f1 f2 g1 g2 h1 h2
+const_LHS = matrix(c(1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+                     0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,
+                     0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,
+                     0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,
+                     10,0,9,0,15,0,3,0,11,0,6,0,3,0,4,0,
+                     0,10,0,9,0,15,0,3,0,11,0,6,0,3,0,4), ncol = 16, byrow = TRUE)
+
+colnames(const_LHS) = c("a1","a2", "b1", "b2" ,"c1", "c2", "d1" ,"d2", "e1", "e2" ,"f1", "f2", "g1", "g2", "h1", "h2")
+rownames(const_LHS) = c("a", "b", "c", "d", "e", "f", "g", "h","box1","box2")
+
+
+const_dir <- c("<=","<=","<=","<=","<=","<=","<=","<=", "<=","<=" )
+
+# right-hand side vector with names
+const_RHS <- c(1,1,1,1,1,1,1,1,22,28)
+bin_vec <- c(1:16)
+
+# create a model
+model <- lp(direction = "max",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            binary.vec = bin_vec)
+
+# solve the model
+model
+model$solution
+model$objval
+
+cbind(const_LHS %*% model$solution, const_dir, const_RHS)
+
+```
+
+The solution is:
+
+Box 1: C, D, H
+
+Box 2: A, B, F, G
+
+With an objective value of $4000.
+
+Item E was not included because it is a heavy item that takes up a lot of weight but does not contribute much to maximize value.
+
+## Problem 2: Capital Budgeting
+
+10 Potential projects
+
+  - Pi = estimated profit of project i
+  
+  - Ci = capital required for project i
+  
+#### Part A
+Decision variables = binary xi (0 or 1) is to commit to project i
+
+Constraints:
+
+  - Total available capital:
+  
+      SUM(xi*ci) <= 4
+      
+  - Mutual Exclusivity: (3,4), (5,6)
+  
+      x3 + x4 <= 1
+      x5 + x6 <= 1
+      
+  - Dependent Investments: (5 or 6) only if (3 or 4)
+  
+      x5 <= x3 + x4 --> x5 - x3 - x4 <= 0
+      x6 <= x3 + x4 --> x6 - x3 - x4 <= 0
+      
+  - Portfolio Diversity: >=2 and <= 4 from (1, 2, 7, 8, 9, 10)
+  
+      x1+x2+x7+x8+x9+x10 >= 2
+      x1+x2+x7+x8+x9+x10 <= 4
+      
+#### Part B
+```{r}
+profits <- c(1.74, 1.44, 2.87, 2.6, 1.26, 1.81, 1.39, 1.89, 2.69, 1.06)
+capitals <- c(0.67, 0.80, 0.16, 0.12, 0.47, 0.59, 0.91, 0.85, 0.95, 0.76)
+
+obj_fun = profits
+
+const_LHS = matrix(c(capitals,
+                     0,0,-1,-1,1,0,0,0,0,0,
+                     0,0,-1,-1,0,1,0,0,0,0,
+                     0,0,1,1,0,0,0,0,0,0,
+                     0,0,0,0,1,1,0,0,0,0,
+                     1,1,0,0,0,0,1,1,1,1,
+                     1,1,1,1,1,1,1,1,1,1
+                     ), ncol = 10, byrow = TRUE)
+
+
+colnames(const_LHS) = c("x1","x2", "X3", "x4", "x5", "x6", "x7", "x8", "x9", "x10")
+rownames(const_LHS) = c("cap","x5 dependency", "x6 dependency", "mut ex 3 4", "mut ex 5 6", "div low", "div up")
+
+
+const_dir <- c("<=","<=","<=","<=","<=", "<=","<=")
+
+# right-hand side vector with names
+const_RHS <- c(4,0,0,1,1,2,4)
+bin_vec <- c(1:10)
+
+# create a model
+model <- lp(direction = "max",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            binary.vec = bin_vec)
+
+# solve the model
+model
+model$solution
+
+cbind(const_LHS %*% model$solution, const_dir, const_RHS)
+
+
+```
+
+The optimum solution is to invest in projects 3, 6, 7 and 8 with a projected profit of $9.26 M.
+
+## Problem 3
+```{r}
+library(readxl)
+class <- read_excel('ClassAssignments.xlsx')
+```
+
+40 students, 2 classes
+
+  - Parents give rankings 1, 2 for each class
+  
+  - ai = parent preference for class 1
+  
+  - bi = parent preference for class 2
+
+#### Part A
+
+Student i; 1 to 40
+
+ ai ∈ {1, 2} be the parent preference for Class 1
+ 
+ bi ∈ {1, 2} be the parent preference for Class 2
+ 
+Decision vars:
+
+ i_1 is the assignment (0 or 1) to Class 1
+ 
+ i_2 is the assignment (0 or 1) to Class 2
+ 
+ 
+Constraints:
+
+  - Each student can only be in one class
+  
+      i_1 + i_2 = 1 (for every i in 1 to 40)
+      
+  - Exactly 20 students in each class
+  
+      SUM(i_1 for i:1 to 40) = 20
+      SUM(i_2 for i:1 to 40) = 20
+ 
+Objective function = minimization
+
+ SUM ai\*i_1 for every i: 1 to 40 + SUM bi\*i_2 for i: 1 to 40
+ 
+ 
+#### Part B
+
+Additional var:
+
+ boy_i is whether student i is a boy (0 or 1)
+ 
+Constraints:
+
+ - Max 12 boys
+ 
+    SUM (boy_i * i_1) <= 12
+    SUM (boy_i * i_2) <= 12
+ 
+#### Part C
+
+Students 10 & 11 cannot be in the same class
+
+Constraints:
+
+ 10_1 + 11_1 = 1 #if only one is in class1 then by default the other is in class2
+ 
+#### Part D
+
+At least 2 students from neighborhood in class 1 and class 2
+
+Constraints:
+
+ 4_1 + 9_1 + 15_1 + 25_1 +30_1 + 36_1 >= 2 #neighborhood class 1
+ 
+ 4_2 + 9_2 + 15_2 + 25_2 +30_2 + 36_2 >= 2 #neighborhood class 2
+

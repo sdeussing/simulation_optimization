@@ -1,0 +1,214 @@
+---
+title: "PS2_Deussing"
+author: "Sarah Deussing"
+date: "2024-11-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## (1) Zippy Lube
+Part A
+```{r}
+hours_per_week = 60 # 10 hours/day * 6 days/week
+profit_per_oc = 15 #per oil change
+lambda = 3.5 #cars/hour = arrival rate
+mieu = 4.3 #cars/hour = service rate
+
+W = 1/(mieu - lambda)
+L = lambda/(mieu - lambda)
+Wq = lambda/((mieu - lambda)*mieu)
+Lq = (lambda*lambda)/((mieu - lambda)*mieu)
+
+paste0("The average number of vehicles waiting for an oil change = ", Lq)
+```
+
+Part B
+```{r}
+oc_per_week = lambda * hours_per_week
+profit = oc_per_week * profit_per_oc
+paste("The profit per week = $", profit)
+```
+
+Part C
+```{r}
+current_ser_time = 1/mieu * 60 # in minutes
+new_ser_time = current_ser_time - 1
+new_ser_time = new_ser_time / 60 # back to hours
+
+new_mieu = 1/new_ser_time
+new_profit = new_mieu * hours_per_week * profit_per_oc
+add_profit = new_profit - profit
+
+payback_period = 5000/add_profit
+paste0("The payback period is ", payback_period, " weeks.")
+```
+
+## (2) Amazon Hub Lockers
+Part A
+```{r}
+# Load the package
+library(queueing)
+
+# Define parameters (arrival and service rates and number of servers)
+c = 50 # num hub lockers
+paste0("c: ",c)
+lambda = 120/24 #120 per day / 24 = arrival rate per hour
+paste0("lambda: ",lambda)
+mieu = 1/8 # 1/8 hours service time = service rate
+paste0("mieu: ",mieu)
+```
+
+The "servers" are the number of hub lockers (in this example, 50).
+The "service time" is the time it takes for a customer to pick up their package (in this example, 8 hours). The "service rate" is 1/service time --> mieu.
+The "arrival rate" is the number of package requests per day (in this example, 120). --> lambda
+  - We need to convert this to an hourly value to match the unit for the service time. 
+
+```{r}
+# Use the functions within queueing package to create your queueing model
+amazonModel <- NewInput.MMC(lambda = lambda,
+                            mu = mieu,
+                            c = c)
+amazonQueue <- QueueingModel(amazonModel)
+
+# Print relevant operating characteristics to conclude
+avg_delay = (amazonQueue$Wq) * 60 #Wq = average wait time in queue
+paste0("The average delay is: ",avg_delay, " mins.")
+```
+
+Part C
+```{r}
+new_lambda = 145/24 # increased requests to 145/day
+max_delay = 1 # 1 hour
+
+original_c <- c
+while(TRUE) {
+  amazonModel_c <- NewInput.MMC(lambda = new_lambda,
+                            mu = mieu,
+                            c = c)
+  amazonQueue_c <- QueueingModel(amazonModel_c)
+  avg_delay_c <- amazonQueue_c$Wq
+  if (avg_delay_c <= max_delay) { break }
+  c <- c+1
+}
+add_lockers <- c - original_c
+paste0("The number of additional lockers needed is: ", add_lockers)
+```
+
+
+## (3) TSA Pre-Check
+Part A + B
+```{r}
+# Load the package
+library(queueing)
+
+# Define parameters (arrival and service rates, number of servers, etc.)
+arrival_rate = 115 # per hour, for both = lambda_total
+service_rate_regular = 60/5 # 5 minutes per person
+service_rate_precheck = 60/3 # 3 minutes per person
+
+# Number of total workers
+c_overall = 10
+
+# Proportion of customers enrolled in TSA PreCheck
+precheck_rate = 0.16 # 16% of people
+lambda_regular = arrival_rate*(1-precheck_rate)
+lambda_precheck = arrival_rate*precheck_rate
+
+# Create the input for the model.
+optimize <- function(lambda, mu, c) {
+  rho <- lambda / (mu * c)
+  if (rho >= 1) { return(NULL) }
+  
+  airportModel <- NewInput.MMC(lambda = lambda, mu = mu, c = c)
+  airportQueue <- QueueingModel(airportModel)
+  return(airportQueue$Lq)
+}
+
+# Create the queueing model for each of the three
+min_wait_time <- Inf
+best_servers <- c(0,0) #n. precheck, n. regular servers
+
+for (c_precheck in 0:9){
+  c_regular = c_overall - c_precheck
+  
+  Lq_precheck <- optimize(lambda_precheck,
+                          service_rate_precheck,
+                          c_precheck)
+  Lq_regular <- optimize(lambda_regular,
+                          service_rate_regular,
+                          c_regular)
+  if (is.null(Lq_precheck) || is.null(Lq_regular)) {next}
+  
+  Lq_total <- Lq_precheck + Lq_regular
+  print(paste0("With ", c_precheck, " PreCheck server(s) and ", c_regular, " Regular server(s), total wait: ", Lq_total))
+  
+  if(Lq_total < min_wait_time) {
+    min_wait_time <- Lq_total
+    best_servers <- c(c_precheck, c_regular)
+  }
+}
+
+# Print relevant operating characteristics and compare
+paste0("The best allocation is: Precheck = ", best_servers[1], " servers and Regular = ", best_servers[2], " servers.")
+
+```
+The optimal assignment of servers is: 1 precheck and 1 regular.
+
+Part C
+```{r}
+best_servers_tot <- list()
+total_wait_times <- c()
+
+init_precheck_rate = 0.16
+num_periods = 6 # 3 years * 6 months
+
+for (period in 2:num_periods) {
+  precheck_rate = init_precheck_rate + 0.04 * (period-1)
+  lambda_regular = arrival_rate * (1 - precheck_rate)
+  lambda_precheck = arrival_rate * precheck_rate
+  
+  min_time <- Inf
+  best_servers <- c(0,0)
+  
+  for (c_precheck in 1:9) {
+    c_regular = c_overall - c_precheck
+    
+    Lq_precheck <- optimize(lambda_precheck,
+                            service_rate_precheck,
+                            c_precheck)
+    Lq_regular <- optimize(lambda_regular,
+                           service_rate_regular,
+                           c_regular)
+    only_regular <- optimize(115, service_rate_regular, 10)
+    #if (is.null(Lq_precheck) || is.null(Lq_regular)) {next}
+    
+    Lq_total <- Lq_precheck + Lq_regular
+    best <- min(Lq_total, only_regular)
+    if (best < min_wait_time) {
+      min_time <- best
+      if (best == only_regular) { best_servers <- c(0,10)}
+      else {best_servers <- c(c_precheck, c_regular)}
+    }
+  }
+  best_servers_tot[[period]] <- best_servers
+  total_wait_times[period] <- min_wait_time
+  
+  print(paste0("Period ", period, ",PreCheck rate: ",precheck_rate))
+  print(paste0("Best allocation: PreCheck = ", best_servers[1], " servers, Regular = ", best_servers[2], " servers"))
+  print(paste0("  Total waiting time: ", min_time))
+}
+
+
+print("Long-term Server Allocation Plan for the Next 3 Years:")
+for (period in 2:num_periods) {
+  print(paste0("Period ", period,
+         ": PreCheck = ", best_servers_tot[[period]][1],
+         " servers, ",
+         "Regular = ", best_servers_tot[[period]][2],
+         " servers"))
+}
+```
+

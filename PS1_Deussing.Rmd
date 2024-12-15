@@ -1,0 +1,201 @@
+---
+title: "PS1_Deussing"
+author: "Sarah Deussing"
+date: "2024-11-10"
+output: html_document
+---
+
+## 1: Investment Example Revisited
+```{r}
+set.seed(1)
+```
+
+
+```{r}
+# Number of scenarios
+n = 1000
+
+# Parameters
+fund_mean = 1.08
+fund_std = 0.17
+fund_initial_value = 10000
+
+# Cash conversion rate
+#cash_rate = 50
+
+# Run simulation model
+simulate <- function(cash_rate) {
+
+results = c()
+
+for (i in 1:n) {
+  
+  # Initialize fund_value and cash_value (amount of cash)
+  fund_value = fund_initial_value
+  cash_value = 0
+  
+  for (j in 1:3) {
+    # TO-DO: Randomly generate scenarios of annual return rate
+    return_rate = rnorm(1, mean = fund_mean, sd = fund_std)
+    
+    # TO-DO: Update fund_value and cash_value accordingly
+    fund_value = fund_value * return_rate
+    cash_value = cash_value + (cash_rate/100 * fund_value)
+    fund_value = fund_value - cash_value
+  }
+  
+  # After three years, remaining funds are converted to cash
+  total_value = cash_value + fund_value
+  
+  # Add to results
+  results = rbind(results, total_value)
+}
+
+# Compute mean and standard deviation
+results_mean = mean(results)
+results_std = sd(results)
+
+cat("Cash_rate:", cash_rate, "%\n")
+cat("Mean:", results_mean, "\n")
+cat("Sd:", results_std, "\n")
+
+# Compute 95% confidence interval
+lower_CI = results_mean - 1.96 * results_std / sqrt(n)
+upper_CI = results_mean + 1.96 * results_std / sqrt(n)
+cat("Confidence interval:", lower_CI, ",", upper_CI, "\n\n")
+}
+
+simulate(cash_rate = 50)
+simulate(cash_rate = 0)
+```
+
+The confidence interval for a cash rate of 50% is significantly higher than when the cash rate is 0%. This means that the cash rate of 50% will generate a higher total cash generated from the initial investment, so this would be the preferred r-value.
+
+## 2: Quality Improvement
+```{r}
+# Number of scenarios
+n = 10000
+
+# Investment decision
+#investment = 5000
+
+# Run simulation model
+simulate2 = function(investment) {
+
+results = c()
+
+for (i in 1:n) {
+  
+  # TO-DO: Randomly generate scenarios of selling price (P) and demand (Q)
+  selling_price = runif(1, min = 1+(investment/10000), max = (1.15+(1.5*investment/10000)))
+  demand = rnorm(1, mean = (10000-(.1*investment)), sd = 1000)
+  
+  # TO-DO: Express profit as a function of Q, P and investment
+  profit = (demand*selling_price) - investment
+  
+  # Add to results
+  results = rbind(results, profit)
+}
+
+# Compute mean and standard deviation
+results_mean = mean(results)
+results_std = sd(results)
+
+# Compute 95% confidence interval
+lower_CI = results_mean - 1.96 * results_std / sqrt(n)
+upper_CI = results_mean + 1.96 * results_std / sqrt(n)
+
+cat("Investment:", investment, "\n")
+cat("Confidence interval:", lower_CI, ",", upper_CI, "\n\n")
+}
+
+simulate2(investment = 0)
+simulate2(investment = 5000)
+simulate2(investment = 15000)
+```
+
+The highest values for the confidence interval occur when the investment is `$`5,000. This means that investing `$`5,000 will yield the greatest profit for the company, so they should select this option.
+
+## 3: Inventory Management with Clearance
+```{r}
+# Number of scenarios
+n = 10000
+
+
+# Parameters
+wholesale_price = 11
+retail_price = 16.95
+clearance_price = 6.95
+
+# Ordering quantity
+#Q = 3500
+
+# Run simulation model
+simulate3 = function(Q) {
+
+results = c()
+
+for (i in 1:n) {
+  # TO-DO: Randomly generate a scenario of demand
+  demand = runif(1, 1000, 5000)
+  
+  
+  # TO-DO: Express potential leftover by using Q and D
+  leftover = max(Q - demand,0)
+  
+  # TO-DO: Compute profit
+  profit = min(demand, Q) * (retail_price - wholesale_price) + (leftover*(clearance_price - wholesale_price))
+  
+  # Add to results
+  results = rbind(results, profit)
+}
+
+# Compute mean and standard deviation
+results_mean = mean(results)
+results_std = sd(results)
+
+# Compute 95% confidence interval
+lower_CI = results_mean - 1.96 * results_std / sqrt(n)
+upper_CI = results_mean + 1.96 * results_std / sqrt(n)
+cat("Q:", Q, ", ")
+cat("Confidence interval:", lower_CI, ",", upper_CI, "\n")
+return(c(lower_CI = lower_CI, upper_CI = upper_CI))
+}
+
+
+order_quantities = seq(3000,4000, by = 50) #simulate for numbers 1000-6000 (every 50th number)
+CIs = sapply(order_quantities, simulate3)
+
+colnames(CIs) = order_quantities
+CIs = t(CIs)
+CIs = as.data.frame(CIs)
+
+best_row = which.max(CIs$upper_CI) #find interval with highest values for greatest profit
+CIs[best_row,]
+```
+
+The highest values for the confidence interval are when Q = 5,000 units, so this should be the number of units purchased.
+
+Testing with new retail price
+```{r}
+# New Parameters
+wholesale_price = 11
+retail_price = 18.95
+clearance_price = 6.95
+
+# Run the same simulation with these new parameters
+CIs_new = sapply(order_quantities, simulate3)
+
+colnames(CIs_new) = order_quantities
+CIs_new = t(CIs_new)
+CIs_new = as.data.frame(CIs_new)
+
+best_row_new = which.max(CIs_new$upper_CI)
+
+# Compare confidence interval values
+CIs[best_row,]
+CIs_new[best_row_new,]
+```
+
+The best order quantity, Q, remains the same at 5000 units. However, the values of the confidence interval are much higher, meaning that there will be a greater profit seen with this new retail price. This is true across all order quantities, the values of the new confidence intervals are higher than those of the original.
+

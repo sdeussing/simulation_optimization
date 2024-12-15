@@ -1,0 +1,421 @@
+---
+title: "PS3"
+author: "Sarah Deussing"
+date: "2024-12-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1: Optimizing Marketing Research Schedule
+Objective: minimize cost
+15HwC1 + 18HwC2 + 13HwoC1 + 16HwoC2 + 10OH1 + 12OH2
+
+Constraints:
+1. Households w/ children >= 400
+  - >= 50% at night --> −1HwC1 + 1HwC2 >= 0
+  - cost: 15 for day and 18 for night
+2. Households w/o children >= 200
+  - >= 60% at night --> -1.5HwoC1 + 1HwoC2 >= 0
+  - cost: 13 for day and 16 for night
+3. One-person households >= 100
+  - >= 70% at night --> -(7/3)OH1 + 1OH2 >= 0
+  - cost: 10 for day and 12 for night
+
+total interviews = 800 (# night > # day)
+
+Decision variables: HwC, HwoC, OH --> 1 = day, 2 = night
+
+HwC1 + HwC2 + HwoC1 + HwoC2 + OH1 + OH2 <= 800
+HwC1 + HwC2 >= 400
+HwoC1 + HwoC2 >= 200
+OH1 + OH2 >= 100
+
+```{r}
+library(lpSolve, quietly = TRUE)
+library(kableExtra, quietly = TRUE)
+
+obj_fun <- c(15, 18, 13, 16, 10, 12)
+
+# left-hand side vector
+const_LHS <- matrix(c(1, 1, 1, 1, 1, 1, # total
+                      1, 1, 0, 0, 0, 0, # total w/ children
+                      0, 0, 1, 1, 0, 0, # total w/o children
+                      0, 0, 0, 0, 1, 1, # total one-person
+                      -1, 1, 0, 0, 0, 0, # night > day
+                      0, 0, -1.5, 1, 0, 0, # night > day
+                      0, 0, 0, 0, -(7/3), 1), # night > day
+                    ncol = 6, byrow = TRUE)
+
+
+const_dir <- c(">=", ">=", ">=", ">=", ">=", ">=", ">=")
+
+colnames(const_LHS) = c("HwC1", "HwC2", "HwoC1", "HwoC2", "OH1", "OH2")
+rownames(const_LHS) = c("total", "total_w_children", "total_wo_children", "total_one_person",
+                        "w_children_night", "wo_children_night", "one_person_night")
+
+# right-hand side vector
+const_RHS <- c(800, 400, 200, 100, 0, 0, 0)
+
+# model
+model1 <- lp(direction = "min",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            compute.sens = TRUE)
+
+model1
+model1$objval
+model1$solution
+
+cbind(const_LHS %*% model1$solution, const_dir, const_RHS)
+```
+
+Lowest price: 11840
+Total w/ children day: 200
+Total w/ children night: 200
+Total w/o children day: 80
+Total w/o children night: 120
+Total 1 person day: 60
+Total 1 person night: 140
+
+## 2: Investment Management Under Taxation
+Objective: maximize profit (goal of 10,000)
+150 shares of 8 different stocks --> 1,200 shares
+
+- 1% transaction cost for selling
+- 30% capital gains tax at time of sale
+
+#### Part A:
+(i) Decision Variables: # of shares to sell
+ - x1 (Yahoo), x2 (GE), x3 (Microsoft), x4 (BoA), x5 (JPMC), x6 (Cisco), x7 (Intel), x8 (Pfizer)
+ 
+(ii) Constraint
+ - cannot sell negative stock (0 <= x)
+ - net cash per share: 0.99current price - 0.3purchase_price
+ 
+
+(iii) Estimated value of Microsoft stock
+ - (150 - x)* $34.55 = value = 150(34.55) - 34.55x
+
+(iv) Objective Function: Max value of portfolio next year
+29.5(150-x1) + 26.31(150-x2) + 34.55(150-x3) + 15.23(150-x4) + 62.43(150-x5) + 26.68(150-x6) + 23.85(150-x7) + 31.66(150-x8)
+This is equal to: (150-xi)next_year_price = 150(next_year_price) - xi(next-year_price). So the objective function is -next_year_price and we have to subtract the objective value from 150(next_year_price) at the end.
+
+
+(v) $10,000 Constraint
+Net price gain >= 10,000
+
+net_price_gain <- 0.99(xi)current_price -  0.3((xi)current_price-150*purchase_price)
+ = 0.99(x)curr  - (0.3(x)curr - 0.3(150)purchase)
+ = 0.99(x)curr - 0.3(x)curr  + 0.3(150)purchase
+ = x(0.99curr - 0.3curr) + 0.3(150)purchase
+
+So we have net_price_gain = x(0.99curr - 0.3curr)
+and the constraint is: 10000 - 0.3(150)purchase
+
+#### Part B:
+```{r}
+library(lpSolve, quietly = TRUE)
+library(kableExtra, quietly = TRUE)
+
+
+
+purchase_price <- c(15.68, 22.10, 30.39, 8.93, 40.55, 18.58, 22.54, 24.84)
+current_price <- c(31.80, 24.28, 32.50, 14.16, 50.99, 24.17, 23.67, 28.77)
+next_year_prices <- c(29.50, 26.31, 34.55, 15.23, 62.43, 26.68, 23.85, 31.66)
+
+obj_fun <- -next_year_prices # (150-x) * price for next year
+
+# calculate net_price_gain
+# = 0.99*xi*current_price -  0.3*(xi*current_price-150*purchase_price) # pull out xi
+# = 0.99*x*curr  - (0.3*x*curr - 0.3*150*purchase)
+# = 0.99*x*curr - 0.3*x*curr  + 0.3*150*purchase
+# = x(0.99*curr - 0.3*curr) + 0.3*150*purchase
+net_price_gain <- 0.99*current_price -  0.3*current_price # then add 0.3*150*purchase
+
+
+# left-hand side vector
+const_LHS <- matrix(c(1, 0, 0, 0, 0, 0, 0, 0, # yahoo
+                      0, 1, 0, 0, 0, 0, 0, 0, # GE
+                      0, 0, 1, 0, 0, 0, 0, 0, # microsoft
+                      0, 0, 0, 1, 0, 0, 0, 0, # BofA
+                      0, 0, 0, 0, 1, 0, 0, 0, # JPMC
+                      0, 0, 0, 0, 0, 1, 0, 0, # cisco
+                      0, 0, 0, 0, 0, 0, 1, 0, # intel
+                      0, 0, 0, 0, 0, 0, 0, 1, # pfizer
+                      1, 0, 0, 0, 0, 0, 0, 0, # yahoo
+                      0, 1, 0, 0, 0, 0, 0, 0, # GE
+                      0, 0, 1, 0, 0, 0, 0, 0, # microsoft
+                      0, 0, 0, 1, 0, 0, 0, 0, # BofA
+                      0, 0, 0, 0, 1, 0, 0, 0, # JPMC
+                      0, 0, 0, 0, 0, 1, 0, 0, # cisco
+                      0, 0, 0, 0, 0, 0, 1, 0, # intel
+                      0, 0, 0, 0, 0, 0, 0, 1, # pfizer
+                      net_price_gain), 
+                    ncol = 8, byrow = TRUE)
+
+
+const_dir <- c("<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", ">=", ">=", ">=", ">=", ">=", ">=", ">=", ">=", ">=")
+
+colnames(const_LHS) = c("x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8")
+rownames(const_LHS) = c("Yahoo", "GE", "Microsoft", "BofA", "JPMC", "Cisco", "Intel", "Pfizer", "Yahoo", "GE", "Microsoft", "BofA", "JPMC", "Cisco", "Intel", "Pfizer", "price_min")
+
+# right-hand side vector
+const_RHS <- c(150, 150, 150, 150, 150, 150, 150, 150, 
+               0, 0, 0, 0, 0, 0, 0, 0, (10000 - sum(0.3*150*purchase_price)))
+
+# model
+model2 <- lp(direction = "max",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            compute.sens = TRUE)
+
+model2
+
+sum(150*next_year_prices) - model2$objval # (150 - x) * next = 150*next - x*next
+model2$solution
+
+cbind(const_LHS %*% model2$solution, const_dir, const_RHS)
+```
+
+(i) Optimal solution: only sell 79.18831 of Yahoo stock for a net price gain of 39867.56
+(ii) An investor that would prefer this solution is someone who wants to sell a significant amount of only one stock to have a greater focus on the remaining companies. 
+
+#### Part C:
+- keep >= 75 shares of each stock --> can only sell 75
+```{r}
+const_LHS <- matrix(c(1, 0, 0, 0, 0, 0, 0, 0, # yahoo
+                      0, 1, 0, 0, 0, 0, 0, 0, # GE
+                      0, 0, 1, 0, 0, 0, 0, 0, # microsoft
+                      0, 0, 0, 1, 0, 0, 0, 0, # BofA
+                      0, 0, 0, 0, 1, 0, 0, 0, # JPMC
+                      0, 0, 0, 0, 0, 1, 0, 0, # cisco
+                      0, 0, 0, 0, 0, 0, 1, 0, # intel
+                      0, 0, 0, 0, 0, 0, 0, 1, # pfizer
+                      1, 0, 0, 0, 0, 0, 0, 0, # yahoo
+                      0, 1, 0, 0, 0, 0, 0, 0, # GE
+                      0, 0, 1, 0, 0, 0, 0, 0, # microsoft
+                      0, 0, 0, 1, 0, 0, 0, 0, # BofA
+                      0, 0, 0, 0, 1, 0, 0, 0, # JPMC
+                      0, 0, 0, 0, 0, 1, 0, 0, # cisco
+                      0, 0, 0, 0, 0, 0, 1, 0, # intel
+                      0, 0, 0, 0, 0, 0, 0, 1, # pfizer
+                      net_price_gain), 
+                    ncol = 8, byrow = TRUE)
+
+
+const_dir <- c("<=", "<=", "<=", "<=", "<=", "<=", "<=", "<=", ">=", ">=", ">=", ">=", ">=", ">=", ">=", ">=", ">=")
+
+colnames(const_LHS) = c("x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8")
+rownames(const_LHS) = c("Yahoo", "GE", "Microsoft", "BofA", "JPMC", "Cisco", "Intel", "Pfizer", "Yahoo", "GE", "Microsoft", "BofA", "JPMC", "Cisco", "Intel", "Pfizer", "price_min")
+
+# right-hand side vector
+const_RHS <- c(75, 75, 75, 75, 75, 75, 75, 75, # changed from 150 in Part B
+               0, 0, 0, 0, 0, 0, 0, 0, (10000 - sum(0.3*150*purchase_price)))
+
+# model
+model3 <- lp(direction = "max",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            compute.sens = TRUE)
+
+model3
+
+sum(150*next_year_prices) - model3$objval
+model3$solution
+cbind(const_LHS %*% model3$solution, const_dir, const_RHS)
+```
+
+(i) Optimal solution: sell 75 of Yahoo and 5.626887 of Intel. For this problem, only the last constraint changed, the decision variables and outcome function remained the same. 
+(ii) The investor that would prefer this solution is someone that wants to keep a diversified stock (i.e. not sell all of any stocks). This individual is concerned about the value of their stock next year because they are selling less of one specific stock to get a slightly higher gain in next year's value.
+
+## 3: Production Planning
+Outcome: Minimize total production cost
+  - 20A + 25B
+Bike A:
+  - requires 1.5M + 1.1E 
+  - cost: 20
+  - max production per month: 1000
+Bike B:
+  - 1.6M + 1.2E
+  - cost: 25
+  - max production per month: 1000
+  
+Currently: 100 of A, 120 of B in stock
+At end: need to have >= 130 of A, >= 110 of B in stock
+
+#### Part A:
+Decision vars:
+- x1 (A May), x2 (A June), x3 (A July), y1 (B May), y2 (B June), y3 (B July)
+
+Constraints:
+- Max Production:
+   - all vars <= 1000
+- Min Demand:
+   - A1 >= 700, B1 >= 800, A2 >= 900, B2 >= 600, A3 >= 1000, B3 >= 900
+- Max Capacity (Machine + Employee):
+   - May: 1.5(x1) + 1.6x2 <= 3000, 1.1(x1) + 1.2(y1) <= 2500
+   - June: 1.5(x1) + 1.6x2 <= 2800, 1.1(x1) + 1.2(y1) <= 2300
+   - July: 1.5(x1) + 1.6x2 <= 3600, 1.1(x1) + 1.2(y1) <= 2400
+- Stock:
+   - A1 = 100 + x1 >= 700 --> x1 >= 600
+   - B1 = 120 + y1 >= 800 --> y1 >= 680
+   - A2 = A1 + x2 >= 900 --> (100 + x1) + x2 >= 900 --> x1 + x2 >= 800
+   - B2 = B1 + y2 >= 600 --> (120 + y1) + y2 >= 600 --> y1 + y2 >= 480
+   - A3 = A2 + x3 >= 1000 + 130 --> (100 + x1 + x2) + x3 >= 1130 --> x1 + x2 + x3 >= 1030
+   - B3 = B2 + y3 >= 900 + 110 --> (120 + y1 + y2) + y3 >= 1010 --> y1 + y2 + y3 >= 890
+
+
+#### Part B:
+```{r}
+library(lpSolve, quietly = TRUE)
+library(kableExtra, quietly = TRUE)
+
+obj_fun <- c(20, 25, 20, 25, 20, 25) # production costs
+
+# left-hand side vector
+const_LHS <- matrix(c(1, 0, 0, 0, 0, 0, # all vars max production
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1,
+                      1, 0, 0, 0, 0, 0, # all vars stock equations
+                      0, 1, 0, 0, 0, 0,
+                      1, 0, 1, 0, 0, 0,
+                      0, 1, 0, 1, 0, 0,
+                      1, 0, 1, 0, 1, 0,
+                      0, 1, 0, 1, 0, 1,
+                      1.5, 1.6, 0, 0, 0, 0, # machine max
+                      1.1, 1.2, 0, 0, 0, 0, # employee max
+                      0, 0, 1.5, 1.6, 0, 0,
+                      0, 0, 1.1, 1.2, 0, 0,
+                      0, 0, 0, 0, 1.5, 1.6,
+                      0, 0, 0, 0, 1.1, 1.2),
+                    ncol = 6, byrow = TRUE)
+
+
+const_dir <- c("<=", "<=", "<=", "<=", "<=", "<=",
+               ">=", ">=", ">=", ">=", ">=", ">=",
+               "<=", "<=", "<=", "<=", "<=", "<=")
+
+colnames(const_LHS) = c("x1", "y1", "x2", "y2", "x3", "y3")
+rownames(const_LHS) = c("Max_x1", "Max_y1", "Max_x2", "Max_y2", "Max_x3", "Max_y3", 
+                        "A1", "B1", "A2", "B2", "A3", "B3",
+                        "Machine_May", "Emp_May", "Machine_June", "Emp_June", "Machine_July", "Emp_July")
+
+# right-hand side vector
+const_RHS <- c(1000, 1000, 1000, 1000, 1000, 1000,
+               600, 680, 800, 480, 1030, 890,
+               3000, 2500, 2800, 2300, 3600, 2400)
+
+# model
+model4 <- lp(direction = "min",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            compute.sens = TRUE)
+
+model4
+
+model4$objval
+model4$solution
+# constraint satisfaction
+cbind(const_LHS %*% model4$solution, const_dir, const_RHS)
+```
+#### Part C:
+The optimal production planning schedule states that bike A is only produced during May and June (1000 in May + 30 in June), and bike B is only produced in May (890 in May). Afterwards, the optimal solutions states that the company will rely only on leftovers.
+
+#### Part D:
+```{r}
+duals <- t(model3$duals[1:18])
+t(data.frame(rbind(rownames(const_LHS), duals)))
+
+```
+
+Constraints A3 and B3 which are the lower bounds for stock required for bikes A and B at the end of July are non-zero shadow prices. This means that for every one decrease in the lower bound for stock in July of A, the cost can be minimized by another \$20 and for every one decrease in the lower bound for stock of July of B, the cost can be minimized by another \$25.
+
+#### Part E:
+
+In stock at the end of May for bike A: 1000
+In stock at the end of June for bike A: 1030
+In stock at the end of May for bike B: 890
+In stock at the end of June for bike B: 890
+
+
+
+#### Part F:
+
+Storage May: x1 + y1 - 700 - 800 <= 400 --> x1 +y1 <= 1900
+Storage Jun: x1 + y1 - 700 - 800 + x2 + y2 -900 -600 <= 400 --> x1 +y1 x2 +y2<= 2600
+```{r}
+library(lpSolve, quietly = TRUE)
+library(kableExtra, quietly = TRUE)
+
+obj_fun <- c(20, 25, 20, 25, 20, 25) # production costs
+
+# left-hand side vector
+const_LHS <- matrix(c(1, 0, 0, 0, 0, 0, # all vars max production
+                      0, 1, 0, 0, 0, 0,
+                      0, 0, 1, 0, 0, 0,
+                      0, 0, 0, 1, 0, 0,
+                      0, 0, 0, 0, 1, 0,
+                      0, 0, 0, 0, 0, 1,
+                      1, 0, 0, 0, 0, 0, # all vars stock equations
+                      0, 1, 0, 0, 0, 0,
+                      1, 0, 1, 0, 0, 0,
+                      0, 1, 0, 1, 0, 0,
+                      1, 0, 1, 0, 1, 0,
+                      0, 1, 0, 1, 0, 1,
+                      1, 1, 0, 0, 0, 0, #storage may
+                      1, 1, 1, 1, 0, 0, #storage jun
+                      1.5, 1.6, 0, 0, 0, 0, # machine max
+                      1.1, 1.2, 0, 0, 0, 0, # employee max
+                      0, 0, 1.5, 1.6, 0, 0,
+                      0, 0, 1.1, 1.2, 0, 0,
+                      0, 0, 0, 0, 1.5, 1.6,
+                      0, 0, 0, 0, 1.1, 1.2),
+                    ncol = 6, byrow = TRUE)
+
+
+const_dir <- c("<=", "<=", "<=", "<=", "<=", "<=",
+               ">=", ">=", ">=", ">=", ">=", ">=",
+               "<=", "<=",
+               "<=", "<=", "<=", "<=", "<=", "<=")
+
+colnames(const_LHS) = c("x1", "y1", "x2", "y2", "x3", "y3")
+rownames(const_LHS) = c("Max_x1", "Max_y1", "Max_x2", "Max_y2", "Max_x3", "Max_y3", 
+                        "A1", "B1", "A2", "B2", "A3", "B3", "Storage_May", "Storage_June",
+                        "Machine_May", "Emp_May", "Machine_June", "Emp_June", "Machine_July", "Emp_July")
+
+# right-hand side vector
+const_RHS <- c(1000, 1000, 1000, 1000, 1000, 1000,
+               600, 680, 800, 480, 1030, 890, 1900, 2600,
+               3000, 2500, 2800, 2300, 3600, 2400)
+
+# model
+model5 <- lp(direction = "min",
+            objective.in = obj_fun, 
+            const.mat = const_LHS,
+            const.dir = const_dir,
+            const.rhs = const_RHS,
+            compute.sens = TRUE)
+
+model5
+
+model5$objval
+model5$solution
+# constraint satisfaction
+cbind(const_LHS %*% model5$solution, const_dir, const_RHS)
+```
+
+The storage constraints change the solution so that for bike A, 800 are produced in May, 0 are produced in June and 230 are produced in July and for bike B, 890 are produced in May, 0 are produced in June and 0 are produced in July.
